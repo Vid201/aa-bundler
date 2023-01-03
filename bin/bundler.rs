@@ -1,13 +1,18 @@
 use aa_bundler::{
     bundler::Bundler,
     models::wallet::Wallet,
+    parse_address, parse_u256,
     rpc::{eth::EthApiServerImpl, eth_api::EthApiServer},
 };
 use anyhow::Result;
 use clap::Parser;
+use ethers::{
+    providers::{Http, Provider},
+    types::{Address, U256},
+};
 use expanded_pathbuf::ExpandedPathBuf;
 use jsonrpsee::{core::server::rpc_module::Methods, server::ServerBuilder, tracing::info};
-use std::{future::pending, net::SocketAddr, panic};
+use std::{future::pending, panic, sync::Arc};
 
 #[derive(Parser)]
 #[clap(
@@ -18,8 +23,14 @@ pub struct Opt {
     #[clap(long)]
     pub mnemonic_file: ExpandedPathBuf,
 
+    #[clap(long, value_parser=parse_address)]
+    pub entry_point: Address,
+
     #[clap(long)]
     pub no_uopool: bool,
+
+    #[clap(long, value_parser=parse_u256)]
+    pub max_verification_gas: U256,
 
     #[clap(flatten)]
     pub uopool_opts: aa_bundler::uopool::UoPoolOpts,
@@ -32,7 +43,7 @@ pub struct Opt {
 
     // execution client rpc endpoint
     #[clap(long, default_value = "127.0.0.1:8545")]
-    pub eth_client_address: SocketAddr,
+    pub eth_client_address: String,
 
     #[clap(flatten)]
     pub bundler_opts: aa_bundler::bundler::BundlerOpts,
@@ -57,10 +68,18 @@ fn main() -> Result<()> {
                 let wallet = Wallet::from_file(opt.mnemonic_file);
                 info!("{:?}", wallet.signer);
 
+                let eth_provider = Arc::new(Provider::<Http>::try_from(opt.eth_client_address)?);
+
                 let _bundler = Bundler::new(wallet);
 
                 if !opt.no_uopool {
-                    aa_bundler::uopool::run(opt.uopool_opts).await?;
+                    aa_bundler::uopool::run(
+                        opt.uopool_opts,
+                        eth_provider,
+                        opt.entry_point,
+                        opt.max_verification_gas,
+                    )
+                    .await?;
                 }
 
                 if !opt.no_rpc {

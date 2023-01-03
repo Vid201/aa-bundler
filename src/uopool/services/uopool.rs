@@ -1,27 +1,42 @@
-use std::sync::Arc;
-
-use crate::uopool::{
+use crate::{uopool::{
     server::uopool_server::{
         uo_pool_server::UoPool, AddRequest, AddResponse, AllRequest, AllResponse, RemoveRequest,
         RemoveResponse,
-    },
-    UserOperationPool,
-};
+    }, UserOperationPool,
+}, contracts::EntryPoint};
 use async_trait::async_trait;
+use ethers::{
+    providers::Middleware,
+    types::{Address, U256},
+};
+use std::sync::Arc;
 use tonic::Response;
 
-pub struct UoPoolService {
-    _uo_pool: Arc<UserOperationPool>,
+pub struct UoPoolService<M: Middleware> {
+    pub uo_pool: Arc<UserOperationPool>,
+    pub eth_provider: Arc<M>,
+    pub entry_point: EntryPoint<M>,
+    pub max_verification_gas: U256,
 }
 
-impl UoPoolService {
-    pub fn new(uo_pool: Arc<UserOperationPool>) -> Self {
-        Self { _uo_pool: uo_pool }
+impl<M: Middleware + 'static> UoPoolService<M> {
+    pub fn new(
+        uo_pool: Arc<UserOperationPool>,
+        eth_provider: Arc<M>,
+        entry_point: Address,
+        max_verification_gas: U256,
+    ) -> Self {
+        Self {
+            uo_pool,
+            entry_point: EntryPoint::new(Arc::clone(&eth_provider), entry_point),
+            eth_provider,
+            max_verification_gas,
+        }
     }
 }
 
 #[async_trait]
-impl UoPool for UoPoolService {
+impl<M: Middleware + 'static> UoPool for UoPoolService<M> {
     async fn add(
         &self,
         _request: tonic::Request<AddRequest>,
