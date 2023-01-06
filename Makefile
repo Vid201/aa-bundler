@@ -15,13 +15,26 @@ format:
 
 lint:
 	cargo fmt --all -- --check
-	cargo clippy -- -D warnings -A clippy::derive_partial_eq_without_eq
+	cargo clippy --tests -- -D warnings -A clippy::derive_partial_eq_without_eq
 
 build:
+	make fetch-thirdparty
+	make compile-thirdparty
 	cargo build
 
 test:
 	cargo test 
 
 fetch-thirdparty:
-	git submodule update --init
+	git submodule update --init 
+	cd thirdparty/account-abstraction && yarn install && cd ../..
+	cd thirdparty/bundler && yarn && cd ../..
+
+compile-thirdparty:
+	cd thirdparty/account-abstraction && yarn compile && cd ../..
+	cd thirdparty/bundler && yarn preprocess && cd ../..
+
+clean:
+	cd thirdparty/account-abstraction && yarn clean && cd ../..
+	cd thirdparty/bundler && yarn clear && cd ../..
+	cargo clean
